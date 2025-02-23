@@ -23,6 +23,8 @@ def test_gpt2(model_size='gpt2'):
   att_mask = att_mask.unsqueeze(-1)
   outputs['last_hidden_state'] = outputs['last_hidden_state'] * att_mask
   openai_outputs *= att_mask
+  print(outputs['last_hidden_state'])
+  print(openai_outputs)
 
   assert torch.allclose(outputs['last_hidden_state'], openai_outputs, atol=1e-1, rtol=1e-2)
 

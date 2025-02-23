@@ -32,9 +32,25 @@ class CausalSelfAttention(nn.Module):
     return proj
 
   def attention(self, key, query, value, attention_mask):
-
+    """
+    key, query, value: [bs, num_attention_heads, seq_len, attention_head_size]
+    attention_mask: [bs, 1, 1, seq_len]
+    """
+    # This layer maps a query and a set of key-value pairs to an output. 
+    # The output is calculated as the weighted sum of the values, where the 
+    # weight of each value is computed by a function that takes the query and 
+    # the corresponding key.
     ### YOUR CODE HERE
-    raise NotImplementedError
+    seq_len = query.shape[2]
+    qk_t = torch.matmul(query,key.transpose(-2,-1))
+    sqrt_d_k = torch.sqrt(torch.tensor(query.shape[-1]))
+    x = qk_t/sqrt_d_k
+    causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)  
+    causal_mask = causal_mask.view(1, 1, seq_len, seq_len)
+    causal_mask = causal_mask * -1e9  
+    final_mask = causal_mask + attention_mask
+    x = x + final_mask  
+    return torch.matmul(torch.softmax(x, dim=-1),value)
 
 
   def forward(self, hidden_states, attention_mask):
