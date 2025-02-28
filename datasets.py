@@ -86,6 +86,7 @@ class ParaphraseDetectionTestDataset(Dataset):
     encoding = self.tokenizer(cloze_style_sents, return_tensors='pt', padding=True, truncation=True)
 
     token_ids = torch.LongTensor(encoding['input_ids'])
+    print(token_ids)
     attention_mask = torch.LongTensor(encoding['attention_mask'])
 
     batched_data = {

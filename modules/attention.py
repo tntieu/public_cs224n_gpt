@@ -41,11 +41,14 @@ class CausalSelfAttention(nn.Module):
     # weight of each value is computed by a function that takes the query and 
     # the corresponding key.
     ### YOUR CODE HERE
+    device = torch.device('cuda')
+
     seq_len = query.shape[2]
     qk_t = torch.matmul(query,key.transpose(-2,-1))
     sqrt_d_k = torch.sqrt(torch.tensor(query.shape[-1]))
     x = qk_t/sqrt_d_k
-    causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)  
+    causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)
+    causal_mask = causal_mask.to(device)
     causal_mask = causal_mask.view(1, 1, seq_len, seq_len)
     causal_mask = causal_mask * -1e9  
     final_mask = causal_mask + attention_mask

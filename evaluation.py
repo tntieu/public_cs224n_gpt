@@ -26,12 +26,13 @@ def model_eval_paraphrase(dataloader, model, device):
   for step, batch in enumerate(tqdm(dataloader, desc=f'eval', disable=TQDM_DISABLE)):
     b_ids, b_mask, b_sent_ids, labels = batch['token_ids'], batch['attention_mask'], batch['sent_ids'], batch[
       'labels'].flatten()
-
+    
     b_ids = b_ids.to(device)
     b_mask = b_mask.to(device)
 
     logits = model(b_ids, b_mask).cpu().numpy()
     preds = np.argmax(logits, axis=1).flatten()
+    preds = np.where(preds == 1, 8505, 3919)
 
     y_true.extend(labels)
     y_pred.extend(preds)
@@ -49,12 +50,13 @@ def model_test_paraphrase(dataloader, model, device):
   y_true, y_pred, sent_ids = [], [], []
   for step, batch in enumerate(tqdm(dataloader, desc=f'eval', disable=TQDM_DISABLE)):
     b_ids, b_mask, b_sent_ids = batch['token_ids'], batch['attention_mask'], batch['sent_ids']
-
+    
     b_ids = b_ids.to(device)
     b_mask = b_mask.to(device)
 
     logits = model(b_ids, b_mask).cpu().numpy()
     preds = np.argmax(logits, axis=1).flatten()
+    preds = np.where(preds == 1, 8505, 3919)
 
     y_pred.extend(preds)
     sent_ids.extend(b_sent_ids)
