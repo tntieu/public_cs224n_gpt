@@ -13,6 +13,7 @@ import torch
 
 import numpy as np
 import torch.nn.functional as F
+import loralib as lora
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -53,15 +54,25 @@ class SonnetGPT(nn.Module):
     # By default, fine-tune the full model. TODO: this is maybe not idea.
     for param in self.gpt.parameters():
       param.requires_grad = True
+    # for name, module in self.gpt.named_modules():
+    #   if 'attn' in name:  # Target attention layers
+    #     lora.Linear(module, r=args.lora_rank)
+
+    # for param in self.gpt.parameters():
+    #   param.requires_grad = False
+    # for param in self.gpt.named_parameters():
+    #   if 'lora' in param[0]:
+    #     param[1].requires_grad = True
 
   def forward(self, input_ids, attention_mask):
     """
     This is similar to the forward for ParaphraseGPT, but we now want to produce a logit for each token in our sequence;
     not just the last token! This will allow our model to learn the natural language distribution that composes sonnets,
     not just the distribution over next tokens for the last token!
-    """
-    ### YOUR CODE HERE
-    raise NotImplementedError
+    """    
+    outputs = self.gpt(input_ids = input_ids, attention_mask = attention_mask)
+    logits = outputs.logits
+    return logits
 
 
   def get_device(self):
@@ -79,7 +90,6 @@ class SonnetGPT(nn.Module):
     """
     token_ids = encoding.to(self.get_device())
     attention_mask = torch.ones(token_ids.shape, dtype=torch.int64).to(self.get_device())
-
 
     for _ in range(max_length):
       # Forward pass to get logits

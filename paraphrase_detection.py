@@ -17,6 +17,7 @@ import torch
 
 import numpy as np
 import torch.nn.functional as F
+import loralib as lora
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -52,6 +53,7 @@ class ParaphraseGPT(nn.Module):
     super().__init__()
     self.gpt = GPT2Model.from_pretrained(model=args.model_size, d=args.d, l=args.l, num_heads=args.num_heads)
     self.paraphrase_detection_head = nn.Linear(args.d, 2)  # Paraphrase detection has two outputs: 1 (yes) or 0 (no).
+    self.paraphrase_lora = lora.Linear(args.d, 2, r=16)
 
     # By default, fine-tune the full model.
     for param in self.gpt.parameters():
@@ -75,14 +77,16 @@ class ParaphraseGPT(nn.Module):
     outputs = self.gpt(input_ids = input_ids, attention_mask = attention_mask)
     last_hidden_state = outputs["last_hidden_state"]
     last_embedded_token = last_hidden_state[:, -1, :]
-    logits = self.paraphrase_detection_head(last_embedded_token)
+    # logits = self.paraphrase_detection_head(last_embedded_token)
+    logits = self.paraphrase_lora(last_embedded_token)
     return logits
 
 
 
 def save_model(model, optimizer, args, filepath):
   save_info = {
-    'model': model.state_dict(),
+    # 'model': model.state_dict(),
+    'model': lora.lora_state_dict(model),
     'optim': optimizer.state_dict(),
     'args': args,
     'system_rng': random.getstate(),
@@ -110,6 +114,7 @@ def train(args):
 
   args = add_arguments(args)
   model = ParaphraseGPT(args)
+  lora.mark_only_lora_as_trainable(model)
   model = model.to(device)
 
   lr = args.lr
@@ -157,7 +162,7 @@ def test(args):
   saved = torch.load(args.filepath)
 
   model = ParaphraseGPT(saved['args'])
-  model.load_state_dict(saved['model'])
+  model.load_state_dict(saved['model'], strict=False)
   model = model.to(device)
   model.eval()
   print(f"Loaded model to test from {args.filepath}")

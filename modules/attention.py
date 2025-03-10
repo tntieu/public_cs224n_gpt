@@ -48,7 +48,7 @@ class CausalSelfAttention(nn.Module):
     sqrt_d_k = torch.sqrt(torch.tensor(query.shape[-1]))
     x = qk_t/sqrt_d_k
     causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)
-    causal_mask = causal_mask.to(device)
+    # causal_mask = causal_mask.to(device)
     causal_mask = causal_mask.view(1, 1, seq_len, seq_len)
     causal_mask = causal_mask * -1e9  
     final_mask = causal_mask + attention_mask
