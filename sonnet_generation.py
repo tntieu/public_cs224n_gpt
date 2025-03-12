@@ -28,6 +28,8 @@ from models.gpt2 import GPT2Model
 
 from optimizer import AdamW
 
+from evaluation import test_sonnet
+
 TQDM_DISABLE = False
 
 
@@ -71,7 +73,8 @@ class SonnetGPT(nn.Module):
     not just the distribution over next tokens for the last token!
     """    
     outputs = self.gpt(input_ids = input_ids, attention_mask = attention_mask)
-    logits = outputs.logits
+    last_hidden_state = outputs['last_hidden_state']
+    logits = self.gpt.hidden_state_to_token(last_hidden_state)
     return logits
 
 
@@ -107,6 +110,14 @@ class SonnetGPT(nn.Module):
       top_p_mask[..., 0] = True  # Always include the highest probability token
       filtered_probs = sorted_probs * top_p_mask  # Zero out unlikely tokens
       filtered_probs /= filtered_probs.sum(dim=-1, keepdim=True)  # Normalize probabilities
+      # if top_k > 0:
+      #   sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+      #   top_k_probs = sorted_probs[:, :top_k]
+      #   top_k_indices = sorted_indices[:, :top_k]
+
+      #   top_k_probs /= top_k_probs.sum(dim=-1, keepdim=True)
+      #   sampled_index = torch.multinomial(top_k_probs, 1)
+      #   sampled_token = top_k_indices.gather(dim=-1, index=sampled_index)
 
       # Sample from filtered distribution
       sampled_index = torch.multinomial(filtered_probs, 1)
@@ -157,6 +168,7 @@ def train(args):
 
   lr = args.lr
   optimizer = AdamW(model.parameters(), lr=lr)
+  min_loss = float(1e9)
 
   # Run for the specified number of epochs.
   for epoch in range(args.epochs):
@@ -184,21 +196,24 @@ def train(args):
 
     train_loss = train_loss / num_batches
     print(f"Epoch {epoch}: train loss :: {train_loss :.3f}.")
-    print('Generating several output sonnets...')
-    model.eval()
-    for batch in held_out_sonnet_dataset:
-      encoding = model.tokenizer(batch[1], return_tensors='pt', padding=True, truncation=True).to(device)
-      output = model.generate(encoding['input_ids'], temperature=args.temperature, top_p=args.top_p)
-      print(f'{batch[1]}{output[1]}\n\n')
-
+    if train_loss < min_loss:
+      min_loss = train_loss
+      print('Generating several output sonnets...')
+      model.eval()
+      for batch in held_out_sonnet_dataset:
+        encoding = model.tokenizer(batch[1], return_tensors='pt', padding=True, truncation=True).to(device)
+        output = model.generate(encoding['input_ids'], temperature=args.temperature, top_p=args.top_p)
+        print(f'{batch[1]}{output[1]}\n\n')
+      save_model(model, optimizer, args, f"best_{args.filepath}")
     # TODO: consider a stopping condition to prevent overfitting on the small dataset of sonnets.
-    save_model(model, optimizer, args, f'{epoch}_{args.filepath}')
+    # save_model(model, optimizer, args, f'{epoch}_{args.filepath}')
 
 
 @torch.no_grad()
+@torch.no_grad()
 def generate_submission_sonnets(args):
   device = torch.device('cuda') if args.use_gpu else torch.device('cpu')
-  saved = torch.load(f'{args.epochs-1}_{args.filepath}', weights_only=False)
+  saved = torch.load(f'best_{args.filepath}', weights_only=False)
 
   model = SonnetGPT(saved['args'])
   model.load_state_dict(saved['model'])
@@ -224,6 +239,7 @@ def generate_submission_sonnets(args):
     for sonnet in generated_sonnets:
       f.write(f"\n{sonnet[0]}\n")
       f.write(sonnet[1])
+  # print('CHRF is: ', test_sonnet(gold_path='data/sonnets_held_out_dev'), '\n')
 
 
 def get_args():
@@ -239,6 +255,8 @@ def get_args():
 
   # Generation parameters.
   parser.add_argument("--temperature", type=float, help="softmax temperature.", default=1.2)
+  # parser.add_argument("--top_k", type=float, help="top-k",
+  #                     default=5000)
   parser.add_argument("--top_p", type=float, help="Cumulative probability distribution for nucleus sampling.",
                       default=0.9)
 
