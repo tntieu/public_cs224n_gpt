@@ -53,18 +53,27 @@ class SonnetGPT(nn.Module):
     self.tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
     self.tokenizer.pad_token = self.tokenizer.eos_token
 
-    # By default, fine-tune the full model. TODO: this is maybe not idea.
-    for param in self.gpt.parameters():
-      param.requires_grad = True
-    # for name, module in self.gpt.named_modules():
-    #   if 'attn' in name:  # Target attention layers
-    #     lora.Linear(module, r=args.lora_rank)
-
+    # # By default, fine-tune the full model. TODO: this is maybe not ideal.
     # for param in self.gpt.parameters():
-    #   param.requires_grad = False
-    # for param in self.gpt.named_parameters():
-    #   if 'lora' in param[0]:
-    #     param[1].requires_grad = True
+    #   param.requires_grad = True
+        # Freeze all model parameters by default
+    # for param in self.gpt.parameters():
+    #     param.requires_grad = False
+
+    lora_replacements = {}
+
+
+    # # Apply LoRA to attention projection layers
+    for name, module in self.gpt.named_modules():
+        if isinstance(module, nn.Linear) and any(proj in name for proj in ["self_attention.query", "self_attention.key", "self_attention.value"]):
+            lora_replacements[name] = lora.Linear(module.in_features, module.out_features, r=16)
+
+    # # Apply LoRA replacements outside of loop
+    for name, new_module in lora_replacements.items():
+        parent_module, child_name = self._get_parent_module(name)
+        setattr(parent_module, child_name, new_module)
+    # Ensure only LoRA layers are trainable
+    lora.mark_only_lora_as_trainable(self.gpt)
 
   def forward(self, input_ids, attention_mask):
     """
@@ -76,7 +85,18 @@ class SonnetGPT(nn.Module):
     last_hidden_state = outputs['last_hidden_state']
     logits = self.gpt.hidden_state_to_token(last_hidden_state)
     return logits
-
+  def _get_parent_module(self, module_name):
+      """
+      Helper function to retrieve the parent module and the final attribute name.
+      Example: 
+        module_name = "gpt_layers.9.self_attention.query"
+        Returns (parent_module, "query")
+      """
+      module_parts = module_name.split(".")
+      parent_module = self.gpt
+      for part in module_parts[:-1]:  # Traverse until the second last element
+          parent_module = getattr(parent_module, part)
+      return parent_module, module_parts[-1]
 
   def get_device(self):
     for param in self.gpt.parameters():
@@ -139,7 +159,8 @@ class SonnetGPT(nn.Module):
 
 def save_model(model, optimizer, args, filepath):
   save_info = {
-    'model': model.state_dict(),
+    # 'model': model.state_dict(),
+    'model': lora.lora_state_dict(model),
     'optim': optimizer.state_dict(),
     'args': args,
     'system_rng': random.getstate(),
@@ -165,7 +186,7 @@ def train(args):
   args = add_arguments(args)
   model = SonnetGPT(args)
   model = model.to(device)
-
+  print(model)
   lr = args.lr
   optimizer = AdamW(model.parameters(), lr=lr)
   min_loss = float(1e9)
@@ -216,7 +237,7 @@ def generate_submission_sonnets(args):
   saved = torch.load(f'best_{args.filepath}', weights_only=False)
 
   model = SonnetGPT(saved['args'])
-  model.load_state_dict(saved['model'])
+  model.load_state_dict(saved['model'], strict=False)
   model = model.to(device)
   model.eval()
 

@@ -2,6 +2,7 @@ import torch
 
 from einops import rearrange
 from torch import nn
+import loralib as lora
 
 
 class CausalSelfAttention(nn.Module):
@@ -13,9 +14,9 @@ class CausalSelfAttention(nn.Module):
     self.all_head_size = self.num_attention_heads * self.attention_head_size
 
     # Initialize the linear transformation layers for key, value, query.
-    self.query = nn.Linear(config.hidden_size, self.all_head_size)
+    self.query = lora.Linear(config.hidden_size, self.all_head_size)
     self.key = nn.Linear(config.hidden_size, self.all_head_size)
-    self.value = nn.Linear(config.hidden_size, self.all_head_size)
+    self.value = lora.Linear(config.hidden_size, self.all_head_size)
     # This dropout is applied to normalized attention scores following the original
     # implementation of transformer. Although it is a bit unusual, we empirically
     # observe that it yields better performance.
@@ -48,7 +49,7 @@ class CausalSelfAttention(nn.Module):
     sqrt_d_k = torch.sqrt(torch.tensor(query.shape[-1]))
     x = qk_t/sqrt_d_k
     causal_mask = torch.triu(torch.ones(seq_len, seq_len), diagonal=1)
-    causal_mask = causal_mask.to(device)
+    # causal_mask = causal_mask.to(device)
     causal_mask = causal_mask.view(1, 1, seq_len, seq_len)
     causal_mask = causal_mask * -1e9  
     final_mask = causal_mask + attention_mask
