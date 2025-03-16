@@ -66,7 +66,7 @@ class SonnetGPT(nn.Module):
     # # Apply LoRA to attention projection layers
     for name, module in self.gpt.named_modules():
         if isinstance(module, nn.Linear) and any(proj in name for proj in ["self_attention.query", "self_attention.key", "self_attention.value"]):
-            lora_replacements[name] = lora.Linear(module.in_features, module.out_features, r=16)
+            lora_replacements[name] = lora.Linear(module.in_features, module.out_features, r=20)
 
     # # Apply LoRA replacements outside of loop
     for name, new_module in lora_replacements.items():
@@ -186,7 +186,6 @@ def train(args):
   args = add_arguments(args)
   model = SonnetGPT(args)
   model = model.to(device)
-  print(model)
   lr = args.lr
   optimizer = AdamW(model.parameters(), lr=lr)
   min_loss = float(1e9)
